@@ -1,6 +1,6 @@
 # ESP32_now_with_ESP32
 
-# 🧠 Bài tập 1: ESP32 Wi-Fi Client (Station Mode)
+#  Bước 1: ESP32 Wi-Fi Client (Station Mode)
 
 Tài liệu này mô tả bài tập thực hành với **ESP32**:  
 Kết nối vào mạng Wi-Fi hiện có (station mode), nhận IP qua DHCP,  
