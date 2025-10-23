@@ -1,0 +1,5 @@
+Lần lượt kết nối từng ESP32 qua cổng USB
+
+Nạp code tương ứng cho từng con (bạn có thể dùng cùng code, chỉ thay giá trị peer_mac để trỏ đến con còn lại).
+
+Sau khi nạp xong, rút USB, cấp nguồn (qua pin hoặc adapter), là chúng có thể tự nói chuyện với nhau.
