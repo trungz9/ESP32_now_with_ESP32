@@ -2,4 +2,161 @@ Lần lượt kết nối từng ESP32 qua cổng USB
 
 Nạp code tương ứng cho từng con (bạn có thể dùng cùng code, chỉ thay giá trị peer_mac để trỏ đến con còn lại).
 
-Sau khi nạp xong, rút USB, cấp nguồn (qua pin hoặc adapter), là chúng có thể tự nói chuyện với nhau.
+Sau khi nạp xong, rút USB, cấp nguồn (qua pin hoặc adapter), là chúng có thể tự nói chuyện với nhau.    
+
+
+🧩 Giai đoạn 1: Chuẩn bị
+⚙️ Cần có:
+
+2 bo ESP32 DevKit (ví dụ ESP32-WROOM-32 hoặc tương tự).
+
+1 cáp USB để nối ESP32 với máy tính (có thể dùng 1 cáp, cắm lần lượt từng con).
+
+Thonny IDE (đã cài MicroPython).
+
+🪪 Giai đoạn 2: Lấy địa chỉ MAC của từng ESP32
+🔹 Bước 1: Cắm ESP32 A vào máy tính
+
+Mở Thonny
+
+Chọn đúng cổng kết nối (Menu: Run → Select interpreter → MicroPython (ESP32) → chọn cổng COM).
+
+🔹 Bước 2: Gõ đoạn code sau vào cửa sổ Shell (hoặc mở file mới, nhấn Run):
+import network
+sta = network.WLAN(network.STA_IF)
+sta.active(True)
+print(sta.config('mac'))
+
+
+➡️ Kết quả hiện ra dạng như:
+
+b'\x24\x6F\x28\xAA\xBB\xCC'
+
+
+📌 Đây là địa chỉ MAC của ESP32 A — ghi lại cẩn thận (copy cả dãy ký tự này).
+
+🔹 Bước 3: Ngắt ESP32 A ra khỏi máy tính.
+🔹 Bước 4: Cắm ESP32 B vào máy tính
+
+Làm lại y hệt các bước trên để in ra địa chỉ MAC của ESP32 B.
+
+Kết quả ví dụ:
+
+b'\x24\x6F\x28\xDD\xEE\xFF'
+
+
+📌 Ghi lại địa chỉ MAC này — đây là MAC của ESP32 B.
+
+🧠 Giai đoạn 3: Nạp code cho từng ESP32
+🔸 ESP32 A
+
+Cắm lại ESP32 A vào máy tính.
+
+Mở Thonny, tạo file mới.
+
+Dán đoạn code sau (đã thay peer_mac bằng MAC của ESP32 B):
+
+import network
+import aioespnow
+import asyncio
+import time
+
+sta = network.WLAN(network.STA_IF)
+sta.active(True)
+sta.config(channel=1)
+sta.disconnect()
+
+e = aioespnow.AIOESPNow()
+e.active(True)
+
+# 🧭 Địa chỉ MAC của ESP32 B
+peer_mac = b'\x24\x6F\x28\xDD\xEE\xFF'
+e.add_peer(peer_mac)
+
+async def send_messages():
+    count = 0
+    while True:
+        msg = f"Hello from ESP32 A #{count}"
+        await e.asend(peer_mac, msg)
+        print("A sent:", msg)
+        count += 1
+        await asyncio.sleep(1)
+
+async def receive_messages():
+    async for mac, msg in e:
+        print("A received:", mac, msg)
+
+async def main():
+    await asyncio.gather(send_messages(), receive_messages())
+
+asyncio.run(main())
+
+
+Lưu lại vào ESP32 bằng:
+
+File → Save as… → MicroPython device → đặt tên: main.py
+
+Rút ESP32 A ra khỏi máy tính.
+
+🔸 ESP32 B
+
+Cắm ESP32 B vào máy tính.
+
+Mở Thonny, tạo file mới.
+
+Dán đoạn code (thay peer_mac bằng MAC của ESP32 A):
+
+import network
+import aioespnow
+import asyncio
+import time
+
+sta = network.WLAN(network.STA_IF)
+sta.active(True)
+sta.config(channel=1)
+sta.disconnect()
+
+e = aioespnow.AIOESPNow()
+e.active(True)
+
+# 🧭 Địa chỉ MAC của ESP32 A
+peer_mac = b'\x24\x6F\x28\xAA\xBB\xCC'
+e.add_peer(peer_mac)
+
+async def send_messages():
+    count = 0
+    while True:
+        msg = f"Hello from ESP32 B #{count}"
+        await e.asend(peer_mac, msg)
+        print("B sent:", msg)
+        count += 1
+        await asyncio.sleep(1)
+
+async def receive_messages():
+    async for mac, msg in e:
+        print("B received:", mac, msg)
+
+async def main():
+    await asyncio.gather(send_messages(), receive_messages())
+
+asyncio.run(main())
+
+
+Save as → MicroPython device → main.py
+
+Rút ESP32 B ra.
+
+⚡ Giai đoạn 4: Chạy thử
+
+Cấp nguồn (USB hoặc 5V) cho cả hai ESP32.
+
+Mỗi con sẽ tự động chạy main.py.
+
+Cả hai sẽ gửi và nhận tin nhắn qua ESP-NOW.
+
+Nếu bạn muốn xem log:
+
+Cắm lại từng con vào Thonny → nhấn “Stop/Restart backend” → sẽ thấy tin nhắn qua lại như:
+
+A sent: Hello from ESP32 A #0
+A received: b'\x24\x6f\x28\xdd\xee\xff' Hello from ESP32 B #0
