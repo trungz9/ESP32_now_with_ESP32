@@ -1,35 +1,35 @@
 # ESP32_now_with_ESP32
 
-#  Bước 1: ESP32 Wi-Fi Client (Station Mode)
+#  Bước 1: Xác định địa chỉ MAC của 2 con ESP32
 
-Tài liệu này mô tả bài tập thực hành với **ESP32**:  
-Kết nối vào mạng Wi-Fi hiện có (station mode), nhận IP qua DHCP,  
-và hoạt động như **TCP client** để gửi dữ liệu đến server (PC).  
-Code còn hỗ trợ nhận chuỗi từ Serial Monitor và chuyển tiếp lên server.
-
----
-
-### 🎯 Qua bài tập:
-- Hiểu cách **ESP32** kết nối Wi-Fi và nhận IP DHCP.  
-- Quan sát kết nối **TCP** đến server và gửi dữ liệu.  
-- Theo dõi việc chuyển tiếp dữ liệu từ Serial Monitor lên server.
+Sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.
+Ta có lần lượt địa chỉ MAC của ESP32 là:
+-6c:c8:40:86:87:3c (gọi là **ESP32 A**)
+-00:70:07:83:f4:34 (gọi là **ESP32 B**)
+Đánh giấu và phân biệt được địa chỉ của 2 con **ESP32**
 
 ---
 
-## 💻 Mã nguồn hoàn chỉnh (ESP32 Arduino Sketch)
+### 🎯 Qua đó:
+- Hiểu cách **ESP32** kết nối với Thonny IDE  
+- Phân biệt được 2 con **ESP32** từ địa chỉ MAC
+
+---
+
+## 💻 Mã nguồn hoàn chỉnh (ESP32 Thonny IDE)
 ```cpp
-#include <WiFi.h>
+import network 
 
-const char* ssid = "W_I_F_I";
-const char* password = "P_A_S_S";
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
 
-// TCP server
-const char* host = "IP_PC";
-const uint16_t port = 5000;
+# Get MAC address (returns bytes)
+mac = wlan.config('mac')
 
-WiFiClient client;
+# Convert to human-readable format
+mac_address = ':'.join('%02x' % b for b in mac)
 
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-}
+print("MAC Address:", mac_address)
+
+```
+
