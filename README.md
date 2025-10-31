@@ -2,44 +2,56 @@
 
 # Part1: Một chiều One-way (Sender → Receiver)
 
-### Chức năng kiểm tra:  
+## Chức năng kiểm tra:  
 
-- ** ESP32 A **  gửi gói tin (ví dụ: "Hello" hoặc giá trị sensor) qua ESP-NOW.  
-- ** ESP32 B **  nhận gói tin và in ra Serial.  
+- **ESP32 A**  gửi gói tin (ví dụ: "Hello" hoặc giá trị sensor) qua ESP-NOW.  
+- **ESP32 B**  nhận gói tin và in ra Serial.  
 
 ### Mục tiêu: Sinh viên thấy cách ESP32 truyền thông tin không cần router/AP.  
 
-
-Sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.  
+*Bản thân sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.  
 Ta có lần lượt địa chỉ MAC của ESP32 là:  
 -6c:c8:40:86:87:3c (gọi là **ESP32 A**)  
 -00:70:07:83:f4:34 (gọi là **ESP32 B**)  
-Đánh giấu và phân biệt được địa chỉ của 2 con **ESP32**  
+Đánh giấu và phân biệt được địa chỉ của 2 con **ESP32***   
 
----
+## Giải thích:
 
-### 🎯 Qua đó:  
-- Hiểu cách **ESP32** kết nối với Thonny IDE    
-- Phân biệt được 2 con **ESP32** từ địa chỉ MAC  
+`network, espnow, time`: Là những thư viện cung cấp để hoạt động **ESP-NOW**
 
----
 
-## 💻 Mã nguồn hoàn chỉnh (ESP32 Thonny IDE)  
-```cpp
-import network 
+### 💻 Mã code part1 (phần của ESP32 A) 
+```py
+import network
+import espnow
+import time
+
 
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
+wlan.config(channel=1)  
+wlan.disconnect()
 
-# Get MAC address (returns bytes)
-mac = wlan.config('mac')
 
-# Convert to human-readable format
-mac_address = ':'.join('%02x' % b for b in mac)
+e = espnow.ESPNow()
+e.active(True)
 
-print("MAC Address:", mac_address)
+print("Gửi thông tin cho ESP32 A...\n")
+
+
+while True:
+    host, msg = e.recv()   
+    if msg:  
+        try:
+            text = msg.decode()  
+        except UnicodeDecodeError:
+            text = str(msg)  
+        print(f"ESP32 A Nhận từ {host.hex().upper()}: {text}")
+    time.sleep(1)
 
 ```
+
+
 
 #  Bước 2: Liên kết 2 địa chỉ MAC của ESP32 để truyền tín hiệu 
 
