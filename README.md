@@ -1,6 +1,14 @@
-# ESP32_now_with_ESP32
+# Thực hiện chức năng ESP-NOW
 
-#  Bước 1: Xác định địa chỉ MAC của 2 con ESP32
+# Part1: Một chiều One-way (Sender → Receiver)
+
+### Chức năng kiểm tra:  
+
+- ** ESP32 A **  gửi gói tin (ví dụ: "Hello" hoặc giá trị sensor) qua ESP-NOW.  
+- ** ESP32 B **  nhận gói tin và in ra Serial.  
+
+### Mục tiêu: Sinh viên thấy cách ESP32 truyền thông tin không cần router/AP.  
+
 
 Sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.  
 Ta có lần lượt địa chỉ MAC của ESP32 là:  
