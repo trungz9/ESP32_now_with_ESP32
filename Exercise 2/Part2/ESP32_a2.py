@@ -22,7 +22,7 @@ while True:
     msg = f"Sensor={sensor_value}"
 
     e.send(peer, msg)
-    print(f"📤 Đã gửi: {msg}")
+    print(f"Đã gửi: {msg}")
     
     start_time = time.ticks_ms()
     while True:
