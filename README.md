@@ -1,442 +1,178 @@
-# ESP32_now_with_ESP32
+# Thực hiện chức năng ESP-NOW
 
-#  Bước 1: Xác định địa chỉ MAC của 2 con ESP32
+# Part1: Một chiều One-way (Sender → Receiver)
 
-Sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.  
+## Chức năng kiểm tra:  
+
+- **ESP32 A**  gửi gói tin (ví dụ: "Hello" hoặc giá trị sensor) qua ESP-NOW.  
+- **ESP32 B**  nhận gói tin và in ra Serial.  
+
+### Mục tiêu: Sinh viên thấy cách ESP32 truyền thông tin không cần router/AP.  
+
+*Bản thân sử dụng Thonny IDE để xác định MAC của 2 con **ESP32**.  
 Ta có lần lượt địa chỉ MAC của ESP32 là:  
 -6c:c8:40:86:87:3c (gọi là **ESP32 A**)  
 -00:70:07:83:f4:34 (gọi là **ESP32 B**)  
-Đánh giấu và phân biệt được địa chỉ của 2 con **ESP32**  
+Đánh giấu và phân biệt được địa chỉ của 2 con **ESP32***   
 
----
+## Giải thích:
 
-### 🎯 Qua đó:  
-- Hiểu cách **ESP32** kết nối với Thonny IDE    
-- Phân biệt được 2 con **ESP32** từ địa chỉ MAC  
+-`network, espnow, time`: Là những thư viện cung cấp để hoạt động **ESP-NOW**.
+-`network.WLAN(network.STA_IF)`: Tạo đối tượng Wi-fi ở chế độ **Station**.
+-`.disconnect()`: Ngắt kết nối Wi-fi để đảm bảo hoạt động đúng kênh tần số.
+-`espnow.ESPnow()  
+  e.active(TRUE)` khởi tạo, bật **ESP_NOW**  
+  
+### 💻 Mã code part1 (phần của ESP32 A) 
+```py
+import network
+import espnow
+import time
 
----
-
-## 💻 Mã nguồn hoàn chỉnh (ESP32 Thonny IDE)  
-```cpp
-import network 
 
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
+wlan.config(channel=1)  
+wlan.disconnect()
 
-# Get MAC address (returns bytes)
-mac = wlan.config('mac')
 
-# Convert to human-readable format
-mac_address = ':'.join('%02x' % b for b in mac)
+e = espnow.ESPNow()
+e.active(True)
 
-print("MAC Address:", mac_address)
+print("Gửi thông tin cho ESP32 A...\n")
+
+
+while True:
+    host, msg = e.recv()   
+    if msg:  
+        try:
+            text = msg.decode()  
+        except UnicodeDecodeError:
+            text = str(msg)  
+        print(f"ESP32 A Nhận từ {host.hex().upper()}: {text}")
+    time.sleep(1)
 
 ```
 
-#  Bước 2: Liên kết 2 địa chỉ MAC của ESP32 để truyền tín hiệu 
 
-Ta phải cho mỗi **ESP32** vào những cổng COM khác nhau (ví dụ: COM5, COM6,...)   
-Sử dụng địa chỉ MAC dạng kiểu bytes trong Python mà Thonny IDE hiểu và chuyền tải dữ liệu.  
-Nạp vào bộ nhớ của ESP32 để chúng vẫn chuyền tải được dữ liệu khi cung cấp điện  
 
----
+# Part2: Hai chiều Two-way (Bidirectional)  
 
-### Tổng kết:  
-- Hiểu cách **ESP32** kết nối với nhau trong Thonny IDE    
-- Biết cách chuyền tải dữ liệu trong 2 con **ESP32** qua lại 
+## Chức năng kiểm tra:
 
----
+-ESP32 A gửi giá trị cảm biến sang ESP32 B.
+-ESP32 B phản hồi bằng 1 ACK (ví dụ "Received").
 
-## 💻 Mã nguồn hoàn chỉnh (ESP32 A gọi địa chỉ của ESP32 B)  
-```cpp
-import network 
-import aioespnow 
-import asyncio
+### Mục tiêu: Hiểu cơ chế trao đổi dữ liệu hai chiều qua ESP-NOW.  
+
+*Cần có 2 file và mỗi file nạp cho mỗi con ESP32, mỗi con ESP32 là cổng COM khác nhau.  
+Và trong file chỉ ra địa chỉ MAC của ESP32 còn lại ở file khác*  
+
+## Giải thích:  
+
+-`sensor_value = 25.4`:Gán giá trị cảm biến
+-`e.send(peer, msg)`: e là đối tượng ESP-NOW, peer là địa chỉ MAC.
+-`host, rmsg = e.recv()`: Xác định địa chỉ MAC của thiết bị gửi và nội dung nhận được. Để trả về giá trị của đối tượng **e**
+-` if time.ticks_diff(time.ticks_ms(), start_time) > 2000:
+            print("Không nhận được ACK trong 2 giây.")
+            break` :Nếu quá 2 giây, in dòng thông báo và thoát vòng chờ.  
+  
+## 💻 Mã code part 2(ESP32 A gọi ESP32 B)  
+```py
+import network
+import espnow
 import time
 
-# Initialize Wi-Fi in station mode
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.config(channel=1)
+wlan.disconnect()
+
+e = espnow.ESPNow()
+e.active(True)
+
+peer = b'\x00\x70\x07\x83\xf4\x34'
+e.add_peer(peer)
+
+print("ESP32 A sẵn sàng...\n")
+
+
+while True:
+    sensor_value = 25.4
+    msg = f"Sensor={sensor_value}"
+
+    e.send(peer, msg)
+    print(f"Đã gửi: {msg}")
+    
+    start_time = time.ticks_ms()
+    while True:
+        host, rmsg = e.recv()
+        if rmsg:
+            print(f"Nhận phản hồi từ {host.hex()}: {rmsg.decode()}")
+            break
+        if time.ticks_diff(time.ticks_ms(), start_time) > 2000:
+            print("Không nhận được ACK trong 2 giây.")
+            break
+    
+    time.sleep(2)
+```
+
+# Part 3: Kết nối thiết bị đa chiều Multi-device (Broadcast/Multicast)  
+
+## Chức năng kiểm tra:  
+
+-Một ESP32 gửi broadcast gói tin đến nhiều ESP32 khác.
+-Các ESP32 nhận đồng thời (có thể kiểm tra bằng nhiều board hoặc giả lập).
+
+### Mục tiêu: Nắm được ESP-NOW thích hợp cho mạng mesh nhỏ hoặc cảm biến phân tán.
+-***ESP32 A** đóng vai thiết bị phát sóng gửi bản tin cho **ESP32 B,C.**
+-**ESP32 B và C** đóng vai thiết bị nhận broadcast, in ra tất cả tin gửi từ bất kỳ thiết bị nào trên cùng channel.*
+
+## 💻 Mã code part 3 (của ESP32 A)
+```py
+import network
+import aioespnow
+import asyncio
+
 sta = network.WLAN(network.STA_IF)
 sta.active(True)
-sta.config(channel=1)  # Set channel explicitly if packets are not received
+sta.config(channel=1)
 sta.disconnect()
 
-# Initialize AIOESPNow
 e = aioespnow.AIOESPNow()
-try:
-    e.active(True)
-except OSError as err:
-    print("Failed to initialize AIOESPNow:", err)
-    raise
+e.active(True)
 
-# Peer MAC address 
-peer_mac = b'\x00\x70\x07\x83\xf4\x34'  
+broadcast_mac = b'\xff\xff\xff\xff\xff\xff'
 
-# Add peer for unicast reliability
-try:
-    e.add_peer(peer_mac)
-except OSError as err:
-    print("Failed to add peer:", err)
-    raise
-
-# Stats tracking
-last_stats_time = time.time()
-stats_interval = 10  # Print stats every 10 seconds
-
-# Async function to send messages
-async def send_messages(e, peer):
-    message_count = 0
+async def send_broadcast():
+    count = 0
     while True:
-        try:
-            message = f"Hello from ESP32 #{message_count}"
-            if await e.asend(peer, message, sync=True):
-                print(f"Sent message: {message}")
-            else:
-                print("Failed to send message")
-            message_count += 1
-            await asyncio.sleep(1)  # Send every 1 second
-        except OSError as err:
-            print("Send error:", err)
-            await asyncio.sleep(5)
+        msg = f"Broadcast message #{count}"
+        await e.asend(broadcast_mac, msg)
+        print(f"Sent: {msg}")
+        count += 1
+        await asyncio.sleep(2)
 
-# Async function to receive messages
-async def receive_messages(e):
-    while True:
-        try:
-            async for mac, msg in e:
-                print(f"Received from {mac.hex()}: {msg.decode()}")
-        except OSError as err:
-            print("Receive error:", err)
-            await asyncio.sleep(5)
-
-# Async function to print stats periodically
-async def print_stats(e):
-    global last_stats_time
-    while True:
-        if time.time() - last_stats_time >= stats_interval:
-            stats = e.stats()
-            print("\nESP-NOW Statistics:")
-            print(f"  Packets Sent: {stats[0]}")
-            print(f"  Packets Delivered: {stats[1]}")
-            print(f"  Packets Dropped (TX): {stats[2]}")
-            print(f"  Packets Received: {stats[3]}")
-            print(f"  Packets Dropped (RX): {stats[4]}")
-            last_stats_time = time.time()
-        await asyncio.sleep(1)  # Check every second
-
-# Main async function
-async def main(e, peer):
-    # Run send, receive, and stats tasks concurrently
-    await asyncio.gather(send_messages(e, peer), receive_messages(e), print_stats(e))
-
-# Run the async program
-try:
-    asyncio.run(main(e, peer_mac))
-except KeyboardInterrupt:
-    print("Stopping transceiver...")
-    e.active(False)
-    sta.active(False)
+asyncio.run(send_broadcast())
 
 ```
-#  Bước 3: Giao tiếp hai chiều – Trao đổi số đọc và hiển thị cảm biến trên OLED
+## 💻 Mã code part 3 (của ESP32 B,C)  
+```py
+import network
+import aioespnow
+import asyncio
 
-Trong dự án này, chúng tôi sẽ có hai bảng ESP32. Mỗi bo mạch được kết nối với màn hình OLED và cảm biến BME280  
-Mỗi bảng nhận được các chỉ số nhiệt độ, độ ẩm và áp suất từ các cảm biến tương ứng của nó.  
-Sau khi gửi bài đọc, bảng sẽ hiển thị trên OLED nếu tin nhắn được gửi thành công;  
-Mỗi bo mạch cần biết địa chỉ MAC của bo mạch kia để gửi tin nhắn.  
+sta = network.WLAN(network.STA_IF)
+sta.active(True)
+sta.config(channel=1)
+sta.disconnect()
 
----
+e = aioespnow.AIOESPNow()
+e.active(True)
 
-### 🎯 Qua đó:  
- Giao thức truyền thông không dây ESP-NOW là một trong những phương pháp dễ dàng nhất để giao tiếp giữa các bo mạch ESP32 từ xa mà không cần bộ định tuyến Wi-Fi.  
- Đọc được cảm biến BME280 trao đổi ESP32 qua mã ESP-NOW
+async def receive_messages():
+    async for mac, msg in e:
+        print(f"Received from {mac.hex().upper()}: {msg.decode()}")
 
----
-
-## 💻 Mã nguồn hoàn chỉnh (ESP32 Thonny IDE)  
-```cpp
-from machine import I2C
-import time
-
-# BME280 default address.
-BME280_I2CADDR = 0x76
-
-# Operating Modes
-BME280_OSAMPLE_1 = 1
-BME280_OSAMPLE_2 = 2
-BME280_OSAMPLE_4 = 3
-BME280_OSAMPLE_8 = 4
-BME280_OSAMPLE_16 = 5
-
-# BME280 Registers
-
-BME280_REGISTER_DIG_T1 = 0x88  # Trimming parameter registers
-BME280_REGISTER_DIG_T2 = 0x8A
-BME280_REGISTER_DIG_T3 = 0x8C
-
-BME280_REGISTER_DIG_P1 = 0x8E
-BME280_REGISTER_DIG_P2 = 0x90
-BME280_REGISTER_DIG_P3 = 0x92
-BME280_REGISTER_DIG_P4 = 0x94
-BME280_REGISTER_DIG_P5 = 0x96
-BME280_REGISTER_DIG_P6 = 0x98
-BME280_REGISTER_DIG_P7 = 0x9A
-BME280_REGISTER_DIG_P8 = 0x9C
-BME280_REGISTER_DIG_P9 = 0x9E
-
-BME280_REGISTER_DIG_H1 = 0xA1
-BME280_REGISTER_DIG_H2 = 0xE1
-BME280_REGISTER_DIG_H3 = 0xE3
-BME280_REGISTER_DIG_H4 = 0xE4
-BME280_REGISTER_DIG_H5 = 0xE5
-BME280_REGISTER_DIG_H6 = 0xE6
-BME280_REGISTER_DIG_H7 = 0xE7
-
-BME280_REGISTER_CHIPID = 0xD0
-BME280_REGISTER_VERSION = 0xD1
-BME280_REGISTER_SOFTRESET = 0xE0
-
-BME280_REGISTER_CONTROL_HUM = 0xF2
-BME280_REGISTER_CONTROL = 0xF4
-BME280_REGISTER_CONFIG = 0xF5
-BME280_REGISTER_PRESSURE_DATA = 0xF7
-BME280_REGISTER_TEMP_DATA = 0xFA
-BME280_REGISTER_HUMIDITY_DATA = 0xFD
-
-
-class Device:
-  """Class for communicating with an I2C device.
-
-  Allows reading and writing 8-bit, 16-bit, and byte array values to
-  registers on the device."""
-
-  def __init__(self, address, i2c):
-    """Create an instance of the I2C device at the specified address using
-    the specified I2C interface object."""
-    self._address = address
-    self._i2c = i2c
-
-  def writeRaw8(self, value):
-    """Write an 8-bit value on the bus (without register)."""
-    value = value & 0xFF
-    self._i2c.writeto(self._address, value)
-
-  def write8(self, register, value):
-    """Write an 8-bit value to the specified register."""
-    b=bytearray(1)
-    b[0]=value & 0xFF
-    self._i2c.writeto_mem(self._address, register, b)
-
-  def write16(self, register, value):
-    """Write a 16-bit value to the specified register."""
-    value = value & 0xFFFF
-    b=bytearray(2)
-    b[0]= value & 0xFF
-    b[1]= (value>>8) & 0xFF
-    self.i2c.writeto_mem(self._address, register, value)
-
-  def readRaw8(self):
-    """Read an 8-bit value on the bus (without register)."""
-    return int.from_bytes(self._i2c.readfrom(self._address, 1),'little') & 0xFF
-
-  def readU8(self, register):
-    """Read an unsigned byte from the specified register."""
-    return int.from_bytes(
-        self._i2c.readfrom_mem(self._address, register, 1),'little') & 0xFF
-
-  def readS8(self, register):
-    """Read a signed byte from the specified register."""
-    result = self.readU8(register)
-    if result > 127:
-      result -= 256
-    return result
-
-  def readU16(self, register, little_endian=True):
-    """Read an unsigned 16-bit value from the specified register, with the
-    specified endianness (default little endian, or least significant byte
-    first)."""
-    result = int.from_bytes(
-        self._i2c.readfrom_mem(self._address, register, 2),'little') & 0xFFFF
-    if not little_endian:
-      result = ((result << 8) & 0xFF00) + (result >> 8)
-    return result
-
-  def readS16(self, register, little_endian=True):
-    """Read a signed 16-bit value from the specified register, with the
-    specified endianness (default little endian, or least significant byte
-    first)."""
-    result = self.readU16(register, little_endian)
-    if result > 32767:
-      result -= 65536
-    return result
-
-  def readU16LE(self, register):
-    """Read an unsigned 16-bit value from the specified register, in little
-    endian byte order."""
-    return self.readU16(register, little_endian=True)
-
-  def readU16BE(self, register):
-    """Read an unsigned 16-bit value from the specified register, in big
-    endian byte order."""
-    return self.readU16(register, little_endian=False)
-
-  def readS16LE(self, register):
-    """Read a signed 16-bit value from the specified register, in little
-    endian byte order."""
-    return self.readS16(register, little_endian=True)
-
-  def readS16BE(self, register):
-    """Read a signed 16-bit value from the specified register, in big
-    endian byte order."""
-    return self.readS16(register, little_endian=False)
-
-
-class BME280:
-  def __init__(self, mode=BME280_OSAMPLE_1, address=BME280_I2CADDR, i2c=None,
-               **kwargs):
-    # Check that mode is valid.
-    if mode not in [BME280_OSAMPLE_1, BME280_OSAMPLE_2, BME280_OSAMPLE_4,
-                    BME280_OSAMPLE_8, BME280_OSAMPLE_16]:
-        raise ValueError(
-            'Unexpected mode value {0}. Set mode to one of '
-            'BME280_ULTRALOWPOWER, BME280_STANDARD, BME280_HIGHRES, or '
-            'BME280_ULTRAHIGHRES'.format(mode))
-    self._mode = mode
-    # Create I2C device.
-    if i2c is None:
-      raise ValueError('An I2C object is required.')
-    self._device = Device(address, i2c)
-    # Load calibration values.
-    self._load_calibration()
-    self._device.write8(BME280_REGISTER_CONTROL, 0x3F)
-    self.t_fine = 0
-
-  def _load_calibration(self):
-
-    self.dig_T1 = self._device.readU16LE(BME280_REGISTER_DIG_T1)
-    self.dig_T2 = self._device.readS16LE(BME280_REGISTER_DIG_T2)
-    self.dig_T3 = self._device.readS16LE(BME280_REGISTER_DIG_T3)
-
-    self.dig_P1 = self._device.readU16LE(BME280_REGISTER_DIG_P1)
-    self.dig_P2 = self._device.readS16LE(BME280_REGISTER_DIG_P2)
-    self.dig_P3 = self._device.readS16LE(BME280_REGISTER_DIG_P3)
-    self.dig_P4 = self._device.readS16LE(BME280_REGISTER_DIG_P4)
-    self.dig_P5 = self._device.readS16LE(BME280_REGISTER_DIG_P5)
-    self.dig_P6 = self._device.readS16LE(BME280_REGISTER_DIG_P6)
-    self.dig_P7 = self._device.readS16LE(BME280_REGISTER_DIG_P7)
-    self.dig_P8 = self._device.readS16LE(BME280_REGISTER_DIG_P8)
-    self.dig_P9 = self._device.readS16LE(BME280_REGISTER_DIG_P9)
-
-    self.dig_H1 = self._device.readU8(BME280_REGISTER_DIG_H1)
-    self.dig_H2 = self._device.readS16LE(BME280_REGISTER_DIG_H2)
-    self.dig_H3 = self._device.readU8(BME280_REGISTER_DIG_H3)
-    self.dig_H6 = self._device.readS8(BME280_REGISTER_DIG_H7)
-
-    h4 = self._device.readS8(BME280_REGISTER_DIG_H4)
-    h4 = (h4 << 24) >> 20
-    self.dig_H4 = h4 | (self._device.readU8(BME280_REGISTER_DIG_H5) & 0x0F)
-
-    h5 = self._device.readS8(BME280_REGISTER_DIG_H6)
-    h5 = (h5 << 24) >> 20
-    self.dig_H5 = h5 | (
-        self._device.readU8(BME280_REGISTER_DIG_H5) >> 4 & 0x0F)
-
-  def read_raw_temp(self):
-    """Reads the raw (uncompensated) temperature from the sensor."""
-    meas = self._mode
-    self._device.write8(BME280_REGISTER_CONTROL_HUM, meas)
-    meas = self._mode << 5 | self._mode << 2 | 1
-    self._device.write8(BME280_REGISTER_CONTROL, meas)
-    sleep_time = 1250 + 2300 * (1 << self._mode)
-
-    sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
-    sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
-    time.sleep_us(sleep_time)  # Wait the required time
-    msb = self._device.readU8(BME280_REGISTER_TEMP_DATA)
-    lsb = self._device.readU8(BME280_REGISTER_TEMP_DATA + 1)
-    xlsb = self._device.readU8(BME280_REGISTER_TEMP_DATA + 2)
-    raw = ((msb << 16) | (lsb << 8) | xlsb) >> 4
-    return raw
-
-  def read_raw_pressure(self):
-    """Reads the raw (uncompensated) pressure level from the sensor."""
-    """Assumes that the temperature has already been read """
-    """i.e. that enough delay has been provided"""
-    msb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA)
-    lsb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA + 1)
-    xlsb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA + 2)
-    raw = ((msb << 16) | (lsb << 8) | xlsb) >> 4
-    return raw
-
-  def read_raw_humidity(self):
-    """Assumes that the temperature has already been read """
-    """i.e. that enough delay has been provided"""
-    msb = self._device.readU8(BME280_REGISTER_HUMIDITY_DATA)
-    lsb = self._device.readU8(BME280_REGISTER_HUMIDITY_DATA + 1)
-    raw = (msb << 8) | lsb
-    return raw
-
-  def read_temperature(self):
-    """Get the compensated temperature in 0.01 of a degree celsius."""
-    adc = self.read_raw_temp()
-    var1 = ((adc >> 3) - (self.dig_T1 << 1)) * (self.dig_T2 >> 11)
-    var2 = ((
-        (((adc >> 4) - self.dig_T1) * ((adc >> 4) - self.dig_T1)) >> 12) *
-        self.dig_T3) >> 14
-    self.t_fine = var1 + var2
-    return (self.t_fine * 5 + 128) >> 8
-
-  def read_pressure(self):
-    """Gets the compensated pressure in Pascals."""
-    adc = self.read_raw_pressure()
-    var1 = self.t_fine - 128000
-    var2 = var1 * var1 * self.dig_P6
-    var2 = var2 + ((var1 * self.dig_P5) << 17)
-    var2 = var2 + (self.dig_P4 << 35)
-    var1 = (((var1 * var1 * self.dig_P3) >> 8) +
-            ((var1 * self.dig_P2) >> 12))
-    var1 = (((1 << 47) + var1) * self.dig_P1) >> 33
-    if var1 == 0:
-      return 0
-    p = 1048576 - adc
-    p = (((p << 31) - var2) * 3125) // var1
-    var1 = (self.dig_P9 * (p >> 13) * (p >> 13)) >> 25
-    var2 = (self.dig_P8 * p) >> 19
-    return ((p + var1 + var2) >> 8) + (self.dig_P7 << 4)
-
-  def read_humidity(self):
-    adc = self.read_raw_humidity()
-    # print 'Raw humidity = {0:d}'.format (adc)
-    h = self.t_fine - 76800
-    h = (((((adc << 14) - (self.dig_H4 << 20) - (self.dig_H5 * h)) +
-         16384) >> 15) * (((((((h * self.dig_H6) >> 10) * (((h *
-                          self.dig_H3) >> 11) + 32768)) >> 10) + 2097152) *
-                          self.dig_H2 + 8192) >> 14))
-    h = h - (((((h >> 15) * (h >> 15)) >> 7) * self.dig_H1) >> 4)
-    h = 0 if h < 0 else h
-    h = 419430400 if h > 419430400 else h
-    return h >> 12
-
-  @property
-  def temperature(self):
-    "Return the temperature in degrees."
-    t = self.read_temperature()
-    ti = t // 100
-    td = t - ti * 100
-    return "{}.{:02d}C".format(ti, td)
-
-  @property
-  def pressure(self):
-    "Return the temperature in hPa."
-    p = self.read_pressure() // 256
-    pi = p // 100
-    pd = p - pi * 100
-    return "{}.{:02d}hPa".format(pi, pd)
-
-  @property
-  def humidity(self):
-    "Return the humidity in percent."
-    h = self.read_humidity()
-    hi = h // 1024
-    hd = h * 100 // 1024 - hi * 100
-    return "{}.{:02d}%".format(hi, hd)
+asyncio.run(receive_messages())
 ```
